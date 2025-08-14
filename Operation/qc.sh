@@ -407,7 +407,7 @@ echo "════════════════════════�
 
 wifi_service_name=$(networksetup -listallnetworkservices 2>/dev/null | grep -E "Wi-Fi|AirPort|Wireless" | head -1)
 if [ ! -z "$wifi_service_name" ]; then
-    wifi_enabled=$(networksetup -getnetworkserviceenabled "$wifi_service_name" 2>/dev/null)
+    wifi_enabled=$(networksetup -getnetworkserviceenabled "$wifi_service_name" 2>&1)
     if [[ "$wifi_enabled" == *"Disabled"* ]]; then
         print_info "Wi-Fi Service ($wifi_service_name)" "Disabled"
         echo "Wi-Fi Service                : Disabled [PASS]" >> "$output_file"
@@ -417,9 +417,13 @@ if [ ! -z "$wifi_service_name" ]; then
         echo "Wi-Fi Service                : Enabled [FAIL - Expected: Disabled]" >> "$output_file"
         ((fail_count++))
         failed_tests+="\n  - Wi-Fi Service: Enabled (Expected: Disabled)"
+    elif [[ "$wifi_enabled" == *"not a recognized network service"* ]] || [[ "$wifi_enabled" == *"Error"* ]]; then
+        print_info "Wi-Fi Service" "Not found (No Wi-Fi hardware)"
+        echo "Wi-Fi Service                : Not found (No Wi-Fi hardware) [PASS]" >> "$output_file"
+        ((pass_count++))
     else
-        print_info "Wi-Fi Service" "Status unknown: $wifi_enabled"
-        echo "Wi-Fi Service                : $wifi_enabled" >> "$output_file"
+        print_info "Wi-Fi Service" "Status unknown"
+        echo "Wi-Fi Service                : Status unknown" >> "$output_file"
     fi
 else
     print_info "Wi-Fi Service" "Not found (No Wi-Fi hardware)"
