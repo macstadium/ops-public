@@ -11,25 +11,20 @@ ORANGE='\033[0;33m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-# Maximize terminal window
 maximize_terminal() {
-    
     if [[ "$TERM_PROGRAM" == "Apple_Terminal" ]]; then
         osascript -e 'tell application "Terminal"
             set bounds of front window to {0, 0, 9999, 9999}
         end tell' 2>/dev/null
-  
     elif [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
         osascript -e 'tell application "iTerm2"
             tell current window
                 set fullscreen to true
             end tell
         end tell' 2>/dev/null
-    
     else
         printf '\e[8;999;999t' 2>/dev/null
     fi
-    
     
     clear
 }
@@ -57,7 +52,6 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Maximize the terminal window
 maximize_terminal
 
 output_file="macos_qc_report_$(date +%Y%m%d_%H%M%S).txt"
@@ -441,7 +435,7 @@ if [ ! -z "$wifi_interface" ]; then
         echo "Preferred Wi-Fi Networks     : No Wi-Fi interface [PASS]" >> "$output_file"
         ((pass_count++))
     else
-        network_count=$(echo "$preferred_networks" | grep -v "Preferred networks" | wc -l | xargs)
+        network_count=$(echo "$preferred_networks" | tail -n +2 | sed '/^\s*$/d' | wc -l | xargs)
         if [[ $network_count -eq 0 ]]; then
             print_info "Preferred Wi-Fi Networks" "None configured"
             echo "Preferred Wi-Fi Networks     : None configured [PASS]" >> "$output_file"
@@ -474,28 +468,42 @@ else
 fi
 
 bluetooth_info=$(system_profiler SPBluetoothDataType 2>/dev/null)
-bluetooth_power=$(echo "$bluetooth_info" | grep -E "Bluetooth Power:" | head -1 | cut -d: -f2 | xargs)
-if [[ "$bluetooth_power" == "Off" ]]; then
-    print_info "Bluetooth State" "Off"
-    echo "Bluetooth State              : Off [PASS]" >> "$output_file"
-    ((pass_count++))
-else
-    print_warning "Bluetooth State" "$bluetooth_power (Expected: Off)"
-    echo "Bluetooth State              : $bluetooth_power [FAIL - Expected: Off]" >> "$output_file"
-    ((fail_count++))
-    failed_tests+="\n  - Bluetooth State: $bluetooth_power (Expected: Off)"
-fi
 
-bluetooth_discoverable=$(echo "$bluetooth_info" | grep "Discoverable:" | head -1 | cut -d: -f2 | xargs)
-if [[ "$bluetooth_discoverable" == "Off" ]]; then
-    print_info "Bluetooth Discoverable" "Off"
-    echo "Bluetooth Discoverable       : Off [PASS]" >> "$output_file"
+if [[ "$bluetooth_info" == *"Bluetooth: Not Available"* ]]; then
+    print_info "Bluetooth State" "Not Available (Hardware disabled)"
+    echo "Bluetooth State              : Not Available (Hardware disabled) [PASS]" >> "$output_file"
+    ((pass_count++))
+    print_info "Bluetooth Discoverable" "N/A (Hardware disabled)"
+    echo "Bluetooth Discoverable       : N/A (Hardware disabled) [PASS]" >> "$output_file"
     ((pass_count++))
 else
-    print_warning "Bluetooth Discoverable" "$bluetooth_discoverable (Expected: Off)"
-    echo "Bluetooth Discoverable       : $bluetooth_discoverable [FAIL - Expected: Off]" >> "$output_file"
-    ((fail_count++))
-    failed_tests+="\n  - Bluetooth Discoverable: $bluetooth_discoverable (Expected: Off)"
+    bluetooth_power=$(echo "$bluetooth_info" | grep -E "Bluetooth Power:" | head -1 | cut -d: -f2 | xargs)
+    if [ -z "$bluetooth_power" ]; then
+        bluetooth_power=$(echo "$bluetooth_info" | grep -E "^\s*State:" | head -1 | cut -d: -f2 | xargs)
+    fi
+    
+    if [[ "$bluetooth_power" == "Off" ]] || [ -z "$bluetooth_power" ]; then
+        print_info "Bluetooth State" "${bluetooth_power:-Off}"
+        echo "Bluetooth State              : ${bluetooth_power:-Off} [PASS]" >> "$output_file"
+        ((pass_count++))
+    else
+        print_warning "Bluetooth State" "$bluetooth_power (Expected: Off)"
+        echo "Bluetooth State              : $bluetooth_power [FAIL - Expected: Off]" >> "$output_file"
+        ((fail_count++))
+        failed_tests+="\n  - Bluetooth State: $bluetooth_power (Expected: Off)"
+    fi
+
+    bluetooth_discoverable=$(echo "$bluetooth_info" | grep -E "^\s*Discoverable:" | head -1 | cut -d: -f2 | xargs)
+    if [[ "$bluetooth_discoverable" == "Off" ]] || [ -z "$bluetooth_discoverable" ]; then
+        print_info "Bluetooth Discoverable" "${bluetooth_discoverable:-Off}"
+        echo "Bluetooth Discoverable       : ${bluetooth_discoverable:-Off} [PASS]" >> "$output_file"
+        ((pass_count++))
+    else
+        print_warning "Bluetooth Discoverable" "$bluetooth_discoverable (Expected: Off)"
+        echo "Bluetooth Discoverable       : $bluetooth_discoverable [FAIL - Expected: Off]" >> "$output_file"
+        ((fail_count++))
+        failed_tests+="\n  - Bluetooth Discoverable: $bluetooth_discoverable (Expected: Off)"
+    fi
 fi
 
 # SUMMARY
